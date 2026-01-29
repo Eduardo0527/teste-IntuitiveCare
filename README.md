@@ -1,1 +1,3 @@
 # teste-IntuitiveCare
+
+O PDF menciona que os arquivos podem ter diferentes formatos, mas apenas arquivos CSV existem para todos os semestres, além disso diz que O CSV que consolida os dados dos 3 trimestres deve conter as colunas: CNPJ, RazaoSocial, Trimestre, Ano, ValorDespesas mas nenhum arquivo dos anos e trimestres disponíveis tem os campos CNPJ nem Razão Social, o que consta no código é REG_ANS que é um Registro de Operadora de plano privado concedido pela ANS e CD_CONTA_CONTABIL que é um código que identifica a conta do plano de contas em vigor. O Teste também pede para acessar a API REST mas o site apresentado não apresenta API REST, então vou optar por uma abordagem de Web Scraping
