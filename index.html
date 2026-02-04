@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel ANS - Vue.js</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card-stat { background: #f8f9fa; border-left: 5px solid #0d6efd; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container mt-4">
+        <h1 class="mb-4">🔍 Monitor de Operadoras ANS</h1>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card p-3 card-stat">
+                    <h5>Total de Despesas</h5>
+                    <h3>R$ {{ formatarDinheiro(stats.total_despesas) }}</h3>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3 card-stat" style="border-color: #198754;">
+                    <h5>Média por Trimestre</h5>
+                    <h3>R$ {{ formatarDinheiro(stats.media_despesas) }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" placeholder="Buscar operadora..." v-model="busca" @keyup.enter="buscarOperadoras">
+            <button class="btn btn-primary" @click="buscarOperadoras">Buscar</button>
+        </div>
+
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Registro ANS</th>
+                    <th>CNPJ</th>
+                    <th>Razão Social</th>
+                    <th>UF</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="op in operadoras" :key="op.registro_ans">
+                    <td>{{ op.registro_ans }}</td>
+                    <td>{{ op.cnpj }}</td>
+                    <td>{{ op.razao_social }}</td>
+                    <td>{{ op.uf }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" @click="verDetalhes(op)">Ver Despesas</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between">
+            <button class="btn btn-secondary" :disabled="page <= 1" @click="mudarPagina(-1)">Anterior</button>
+            <span>Página {{ page }}</span>
+            <button class="btn btn-secondary" @click="mudarPagina(1)">Próximo</button>
+        </div>
+
+        <div v-if="operadoraSelecionada" class="modal d-block" style="background: rgba(0,0,0,0.5)">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ operadoraSelecionada.razao_social }}</h5>
+                        <button type="button" class="btn-close" @click="operadoraSelecionada = null"></button>
+                    </div>
+                    <div class="modal-body">
+                        <h6>Histórico de Despesas:</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between" v-for="d in despesasAtuais">
+                                <span>{{ d.trimestre }}/{{ d.ano }}</span>
+                                <strong>R$ {{ formatarDinheiro(d.valor_despesa) }}</strong>
+                            </li>
+                        </ul>
+                        <div v-if="despesasAtuais.length === 0" class="alert alert-warning mt-2">Nenhuma despesa registrada.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    operadoras: [],
+                    stats: { total_despesas: 0, media_despesas: 0 },
+                    page: 1,
+                    busca: '',
+                    operadoraSelecionada: null,
+                    despesasAtuais: []
+                }
+            },
+            methods: {
+                async carregarDados() {
+                    // Chama a API do Flask
+                    const res = await fetch(`http://127.0.0.1:5000/api/operadoras?page=${this.page}&search=${this.busca}`);
+                    const json = await res.json();
+                    this.operadoras = json.data;
+                },
+                async carregarStats() {
+                    const res = await fetch(`http://127.0.0.1:5000/api/estatisticas`);
+                    this.stats = await res.json();
+                },
+                async verDetalhes(op) {
+                    this.operadoraSelecionada = op;
+                    const res = await fetch(`http://127.0.0.1:5000/api/operadoras/${op.cnpj}/despesas`);
+                    this.despesasAtuais = await res.json();
+                },
+                mudarPagina(delta) {
+                    this.page += delta;
+                    this.carregarDados();
+                },
+                buscarOperadoras() {
+                    this.page = 1;
+                    this.carregarDados();
+                },
+                formatarDinheiro(valor) {
+                    return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                }
+            },
+            mounted() {
+                this.carregarDados();
+                this.carregarStats();
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+{
+	"info": {
+		"_postman_id": "teste-ans-collection",
+		"name": "API Operadoras ANS",
+		"description": "Documentação da API para consulta de Operadoras de Saúde e Despesas.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Verificar Status (Health Check)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:5000/",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "5000",
+					"path": [""]
+				},
+				"description": "Verifica se o servidor está online."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Listar Operadoras (Com Paginação)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:5000/api/operadoras?page=1&limit=5&search=",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "5000",
+					"path": ["api", "operadoras"],
+					"query": [
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Número da página"
+						},
+						{
+							"key": "limit",
+							"value": "5",
+							"description": "Itens por página"
+						},
+						{
+							"key": "search",
+							"value": "",
+							"description": "Filtrar por nome (opcional)"
+						}
+					]
+				},
+				"description": "Retorna a lista de operadoras cadastradas."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Estatísticas Gerais",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:5000/api/estatisticas",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "5000",
+					"path": ["api", "estatisticas"]
+				},
+				"description": "Retorna o total de despesas, média e o Top 5 operadoras."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Detalhes da Operadora (Buscar por CNPJ)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:5000/api/operadoras/00000000000000",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "5000",
+					"path": ["api", "operadoras", "00000000000000"],
+					"description": "Substitua o 000000... pelo CNPJ real de uma operadora que você pegou na rota 2."
+				},
+				"description": "Retorna os dados cadastrais de uma operadora específica."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Histórico de Despesas",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:5000/api/operadoras/00000000000000/despesas",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "5000",
+					"path": ["api", "operadoras", "00000000000000", "despesas"],
+					"description": "Substitua o 00000... pelo CNPJ real."
+				},
+				"description": "Lista todas as despesas trimestrais de uma operadora."
+			},
+			"response": []
+		}
+	]
+}
