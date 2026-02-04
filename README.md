@@ -1,139 +1,158 @@
-# teste-IntuitiveCare
+# Teste Técnico - IntuitiveCare
 
-- Parte 1
-O PDF menciona que os arquivos podem ter diferentes formatos, mas apenas arquivos CSV existem para todos os semestres, além disso diz que O CSV que consolida os dados dos 3 trimestres deve conter as colunas: CNPJ, RazaoSocial, Trimestre, Ano, ValorDespesas mas nenhum arquivo dos anos e trimestres disponíveis tem os campos CNPJ nem Razão Social, o que consta no código é REG_ANS que é um Registro de Operadora de plano privado concedido pela ANS e CD_CONTA_CONTABIL que é um código que identifica a conta do plano de contas em vigor. O Teste também pede para acessar a API REST mas o site apresentado não apresenta API REST, então vou optar por uma abordagem de Web Scraping. Optei pelo processamento em DataFrames (Memória), mas processando trimestre por trimestre e consolidando no final. Isso é um meio-termo: não carrega tudo de uma vez (o que estouraria a RAM se fossem gigabytes), mas é mais rápido que linha a linha. 
+Este repositório contém a solução completa para o desafio técnico da IntuitiveCare. O projeto abrange o ciclo completo de engenharia de dados e desenvolvimento, desde a extração (Web Scraping/ETL), tratamento e validação, modelagem de banco de dados (SQL) até a exposição dos dados via API e Interface Web.
 
-Trade-off Técnico (Item 1.2):
+---
 
-Decisão: Processei cada trimestre independentemente e adicionei a uma lista all_data, consolidando apenas no final.
+## 🛠 Tecnologias Utilizadas
 
-Justificativa: Como são apenas 3 trimestres de arquivos CSV/Excel (dados tabulares), o volume geralmente cabe na memória de um PC moderno (alguns GBs). Se fosse para baixar o histórico de 10 anos, eu teria optado por escrever o CSV linha a linha (stream) para o disco sem carregar na RAM. No código, usei io.BytesIO para baixar o ZIP na RAM sem salvar no disco antes de extrair, o que é mais rápido (I/O de disco é lento).
+- **Linguagem:** Python 3
+- **Análise de Dados:** Pandas
+- **Banco de Dados:** MySQL
+- **Backend:** Flask (Python)
+- **Frontend:** HTML5 + Vue.js (CDN)
+- **Bibliotecas:** `requests`, `beautifulsoup4`, `sqlalchemy`, `pymysql`, `flask-cors`.
 
-Análise de Inconsistências (Item 1.3):
+---
 
-CNPJ Duplicado: O código detecta se um mesmo CNPJ tem nomes diferentes (comum se a empresa mudou de nome no meio do ano). A "decisão crítica" implementada foi padronizar pelo primeiro nome encontrado.
+## 🚀 Parte 1: Extração e Transformação (ETL)
 
-Valores: O código converte formatação brasileira (1.000,00) para float Python, remove zeros (considerados irrelevantes para análise de despesa) mas mantém negativos (pois em contabilidade, estornos podem ser negativos e são dados válidos).
+### 📥 Estratégia de Extração
+O enunciado menciona que o CSV consolidado deveria conter colunas como `CNPJ` e `RazaoSocial`, porém os arquivos fonte (anos/trimestres) possuem apenas `REG_ANS` e `CD_CONTA_CONTABIL`. Além disso, devido à indisponibilidade da API REST mencionada no teste, optou-se por uma abordagem de **Web Scraping**.
 
-- Parte 2
-Como não temos CNPJs no arquivo original e sim os registros ANS, devemos inverter a ordem das tarefas 2.1 e 2.2 o código primeiro baixa a base cadastral da ANS, usa o RegistroANS como chave para cruzar os dados e trazer o CNPJ, Razão Social real, UF e Modalidade e depois, com os CNPJs reais agora presentes, aplica a validação de formato e dígitos verificadores. A tarefa 2.3 é realizada normalmente.
+**Processamento:**
+O processamento foi realizado utilizando DataFrames em memória, iterando trimestre por trimestre e consolidando apenas ao final.
 
-Decisão de Chave de Cruzamento: Registro ANS
-Embora o enunciado sugira o uso do CNPJ, optou-se pelo Registro ANS (REGISTRO_OPERADORA) como chave primária de ligação.
+> **Trade-off Técnico (Item 1.2)**
+>
+> * **Decisão:** Processamento independente de cada trimestre, adicionando a uma lista `all_data` e consolidando no final.
+> * **Justificativa:** Como o escopo abrange apenas 3 trimestres de dados tabulares, o volume cabe na memória de um PC moderno (alguns GBs). O carregamento total simultâneo estouraria a RAM se fossem muitos anos.
+> * **Otimização:** Utilizei `io.BytesIO` para baixar o ZIP diretamente na RAM e extrair sem salvar em disco previamente, otimizando a performance dado que I/O de disco é geralmente o gargalo. Se fosse um histórico de 10 anos, a opção seria *stream* linha a linha para o disco.
 
-Motivo: O arquivo de origem das despesas não possuía uma coluna de CNPJ confiável estruturada, mas possuía o código da operadora embutido. Além disso, o Registro ANS é a chave imutável dentro do ecossistema da agência, enquanto CNPJs podem mudar em casos de reestruturação societária (matriz/filial), tornando o Registro ANS uma chave mais robusta para garantir o match.
+### ⚠️ Tratamento de Inconsistências (Item 1.3)
 
-Trade-off Técnico no JOIN (Tarefa 2.2)
-Decisão: Foi utilizado um how='left' join, mantendo a tabela de despesas à esquerda.
+* **CNPJ Duplicado:** O código detecta se um mesmo CNPJ possui nomes diferentes (comum em mudanças de Razão Social). A decisão crítica foi **padronizar pelo primeiro nome encontrado**.
+* **Valores Monetários:** Conversão da formatação brasileira (`1.000,00`) para `float` Python. Zeros foram removidos (irrelevantes), mas **valores negativos foram mantidos**, pois representam estornos contábeis válidos.
 
-Justificativa: O objetivo primário é analisar o volume financeiro de despesas. É comum que operadoras que tiveram despesas no passado (ex: em 2023) não constem mais no arquivo de "Operadoras Ativas" de hoje (foram liquidadas, fundidas, etc.). Se usássemos inner join, perderíamos esses registros financeiros históricos. Com left join, mantemos a despesa e marcamos os dados cadastrais como "N/D" (Não Disponível) para análise posterior.
+---
 
-Implementação da Validação de CNPJ (Tarefa 2.1)
-A função validar_cnpj(cnpj) implementa o algoritmo oficial da Receita Federal. Ela calcula os dois dígitos verificadores baseados nos 12 primeiros números e pesos específicos, comparando com os dígitos fornecidos.
+## 🔄 Parte 2: Enriquecimento e Validação
 
-Trade-off Técnico na Validação (Tarefa 2.1)
-Decisão: Registros com CNPJs inválidos (ou "N/D" por falta de match) NÃO foram excluídos. Foi criada uma coluna CNPJ_Valido (True/False).
+Devido à ausência de CNPJs nos arquivos financeiros originais, a ordem das tarefas foi invertida: primeiro baixa-se a base cadastral para enriquecimento, cruza-se os dados e, por fim, valida-se.
 
-Justificativa: Em auditoria de dados financeiros, um CNPJ inválido é um finding (um achado de auditoria), não um lixo para ser descartado. Excluir a linha significaria "esconder" milhões de reais em despesas que ocorreram sob um cadastro problemático. Mantemos o dado e o marcamos como suspeito (False) para que analistas possam filtrar se desejarem.
+### Estratégia de Cruzamento (Join)
 
-Agregação e Desafio Adicional (Tarefa 2.3)
-O script utiliza o poder do groupby do Pandas.
+> **Decisão de Chave:** **Registro ANS (`REGISTRO_OPERADORA`)**
+> * **Motivo:** O arquivo de despesas possuía o código da operadora confiável. O Registro ANS é a chave imutável no ecossistema da agência, enquanto CNPJs podem mudar (reestruturação societária, matriz/filial), tornando o Registro ANS mais robusto.
 
-Agregação Simples: Agrupa por RazaoSocial e UF e soma o ValorDespesas.
+> **Trade-off no JOIN (Tarefa 2.2)**
+> * **Decisão:** `how='left'` join (Tabela de Despesas à esquerda).
+> * **Justificativa:** O foco é o volume financeiro. Operadoras que tiveram despesas no passado mas foram liquidadas (não constam no arquivo de "Ativas" atual) devem ser contabilizadas. Um `inner join` perderia esse histórico. Dados cadastrais faltantes foram marcados como "N/D".
 
-Desafio (Média/Desvio Padrão): Foi necessário um processo de duas etapas:
+### ✅ Validação de CNPJ (Tarefa 2.1)
 
-Primeiro, calcular a soma de despesas por trimestre para cada operadora (criando um sub-dataframe df_trimestral).
+Implementação do algoritmo oficial da Receita Federal (cálculo de dígitos verificadores baseados em pesos e resto da divisão).
 
-Depois, agrupar esse sub-dataframe por operadora para calcular a média (mean) e o desvio padrão (std) desses totais trimestrais. Isso mostra se os gastos da operadora são estáveis ou se têm picos muito grandes.
+> **Trade-off na Validação**
+> * **Decisão:** Registros com CNPJs inválidos ou não encontrados **NÃO** foram excluídos. Criou-se uma flag `CNPJ_Valido` (True/False).
+> * **Justificativa:** Em auditoria, um dado inválido é um *finding* (achado), não lixo. Excluir a linha esconderia milhões em despesas ocorridas sob cadastros problemáticos. O dado é mantido e marcado para filtragem analítica posterior.
 
-- Parte 3
+### 📊 Agregação (Tarefa 2.3)
 
-A Decisão de Arquitetura (Trade-off: Normalização)
+Utilização do `groupby` do Pandas por `RazaoSocial` e `UF`.
+* **Desafio Adicional:** Cálculo de Média e Desvio Padrão realizado em duas etapas (Soma por trimestre -> Agrupamento por operadora para `mean` e `std`) para identificar a estabilidade ou volatilidade dos gastos.
 
-O desafio pede para escolhermos entre Tabela Única (Desnormalizada) ou Tabelas Separadas (Normalizadas).
+---
 
-Minha Escolha: Opção B - Tabelas Normalizadas Separadas.
+## 🗄️ Parte 3: Banco de Dados e SQL
 
-Justificativa:
+### Arquitetura e Modelagem
 
-Organização: Imagine repetir o nome da operadora, o CNPJ e o endereço em cada linha de despesa. Se a operadora tiver 1.000 despesas, você repete o nome 1.000 vezes. Isso gasta espaço e gera erro (se digitar um nome errado, quebra o agrupamento).
+> **Trade-off: Normalização**
+> * **Escolha:** **Opção B - Tabelas Normalizadas Separadas.**
+> * **Justificativa:**
+>     1.  **Organização:** Evita repetir Razão Social, CNPJ e Endereço em cada linha de despesa (economia de espaço e integridade).
+>     2.  **Performance:** As somas são feitas em uma tabela de fatos "magra" (apenas IDs numéricos e valores), o que é mais performático.
 
-Normalização: Nós separamos "Quem é a empresa" (Cadastro) de "O que ela gastou" (Despesas). Ligamos as duas pelo registro_ans.
+### Tipos de Dados
+* **Dinheiro:** `DECIMAL(15, 2)`. *Motivo:* `FLOAT` é aproximado; `DECIMAL` é exato (financeiro). Perder centavos em contabilidade é inaceitável.
+* **Datas:** `DATE`. *Motivo:* Garante ordenação cronológica correta, ao contrário de `VARCHAR`.
 
-Performance: Para somar valores, o banco lê uma tabela mais "magra" (só números), o que é muito mais rápido.
+### Queries Analíticas Desenvolvidas
 
-A Decisão de Tipos de Dados (Trade-off)
+1.  **Top 5 Crescimento de Despesas:** `(Valor Final - Valor Inicial) / Valor Inicial`. Filtra apenas empresas com dados presentes em ambas as pontas.
+2.  **Distribuição por UF:** Uso de `GROUP BY` por estado com cálculo de média por operadora dentro do agrupamento.
+3.  **Operadoras com Despesas Consistentemente Altas (Query 3):**
+    * *Estratégia:* `CROSS JOIN` com subquery de média escalar.
+    * *Justificativa Técnica:* Optou-se por **`COUNT(DISTINCT d.trimestre)`** ao invés de `COUNT` simples. Isso garante a precisão mesmo se houver duplicação de dados na ingestão, assegurando que um mesmo trimestre não seja contabilizado múltiplas vezes.
 
-Dinheiro: Usaremos DECIMAL(15, 2) e não FLOAT.
+---
 
-Por que? FLOAT é aproximado (matemática científica). DECIMAL é exato (matemática financeira). Em contabilidade, 1 centavo perdido é inaceitável.
+## 🌐 Parte 4: API e Interface Web
 
-Datas: Usaremos DATE e não VARCHAR (Texto).
+### Backend (Flask)
 
-Por que? Se a data for texto "01/02/2023", o computador acha que vem antes de "02/01/2023" (ordem alfabética). Se for DATE, ele entende o tempo cronológico corretamente.
+> **Escolha do Framework: Flask (Opção A)**
+>
+> "Optei pelo Flask devido à sua simplicidade e maturidade. Enquanto o FastAPI oferece melhor performance assíncrona, o Flask é robusto e perfeitamente capaz de lidar com o volume de dados do teste sem a complexidade adicional de tipagem estática. A facilidade de integração com SQLAlchemy foi decisiva."
 
-Importação: Optei por usar python para importação dos dados para o banco de dados, por simplicidade.
+### Decisões de Arquitetura da API
+1.  **Paginação:** **Offset-based (Opção A)**. Implementação simples (`LIMIT x OFFSET y`). Para o volume atual, não há degradação de performance que justifique Cursor-based.
+2.  **Cache vs Queries Diretas:** **Queries Diretas (Opção A)**. Os dados da ANS são atualizados trimestralmente. Redis seria *over-engineering* para dados estáticos; MySQL responde em milissegundos.
+3.  **Busca:** **Servidor (Opção A)** via SQL (`LIKE %...%`). Filtrar no client-side consumiria banda excessiva e sobrecarregaria o navegador.
 
-Tratamento de Inconsistências (Análise Crítica):
+---
 
-Strings em campos numéricos: O Python já limpou isso na Parte 1.
+## ▶️ Como Executar o Projeto
 
-Valores NULL: Se uma operadora não tem UF no cadastro, inserimos como NULL ou 'ND'. O SQL aceita NULL se não dissermos NOT NULL na criação da tabela.
+Siga a ordem abaixo para reproduzir a solução completa:
 
-Datas: O trimestre "1T2023" é texto, então guardamos como texto (VARCHAR), mas o campo ano guardamos como número (INT) para ordenar.
+### 1. Extração (Parte 1)
+Execute o script de scraping para baixar e consolidar os dados brutos.
+```bash
+python scraping.py
+```
 
-Query 1: Top 5 operadoras com maior crescimento de despesas
-O Desafio: Como comparar o primeiro e o último trimestre se algumas empresas não têm dados em todos? A Lógica:
+### 2. Validação e Enriquecimento (Parte 2)
 
-Para cada empresa, descobrimos qual foi a primeira data que ela apareceu e a última data.
+Execute o script de validação para baixar os dados cadastrais, cruzar com as despesas e gerar os relatórios.
 
-Pegamos o valor gasto nessas duas datas.
+```bash
+python validacao.py
+```
 
-Fórmula: (Valor Final - Valor Inicial) / Valor Inicial.
+## 3. Banco de Dados (Parte 3)
 
-Justificativa para dados faltantes: Se a empresa não tem dado no primeiro trimestre analisado, ela não pode entrar no cálculo de "crescimento", pois seria divisão por zero ou crescimento infinito (começou do nada). Filtramos apenas quem tem dados em ambos os pontas.
+### A. Criação da Estrutura
+Execute o script `criar_banco.sql` no seu cliente MySQL (Workbench, DBeaver, ou via terminal).
+* Isso criará o banco de dados `teste_ans` e as tabelas necessárias.
 
-Query 2: Distribuição por UF + Desafio (Média por Operadora)
-Explicação: Aqui usamos GROUP BY para "agrupar" as linhas por estado. O desafio pede a média por operadora dentro da UF, não a média geral da UF.
+### B. Importação dos Dados
+1. Edite o arquivo `importar_banco.py`.
+2. Troque o valor do campo `SENHA_MYSQL` pela sua senha do banco de dados.
+3. Execute o script:
 
-Aqui está uma versão mais concisa e direta, seguindo o mesmo estilo dos itens anteriores do seu README:
+```bash
+python importar_banco.py
+```
+### C. Análise SQL
+Execute as queries contidas no arquivo `queries.sql` no seu cliente MySQL para visualizar os resultados das perguntas de negócio.
 
-Query 3: Operadoras com Despesas Consistentemente Altas
-Objetivo: Identificar operadoras que superaram a média global de despesas em pelo menos 2 dos 3 trimestres analisados.
+---
 
-Estratégia: Utilização de CROSS JOIN com uma subquery para calcular a média escalar do mercado e compará-la registro a registro.
+## 4. Servidor e Frontend (Parte 4)
 
-Justificativa Técnica (Integridade de Dados):
+### A. Configuração da API
+1. Edite o arquivo `api.py`.
+2. Troque o valor do campo `SENHA_MYSQL` pela sua senha do banco de dados.
 
-Optou-se pelo uso de COUNT(DISTINCT d.trimestre) em vez de um COUNT simples. Essa abordagem garante a precisão da análise mesmo em cenários de inconsistência ou duplicação de dados no banco, assegurando que um mesmo trimestre não seja contabilizado múltiplas vezes para a mesma operadora.
+### B. Iniciar Servidor
+Execute o script abaixo para subir a API:
 
-A filtragem via WHERE antes do agrupamento otimiza a performance ao descartar despesas baixas precocemente.
+```bash
+python api.py
+```
+> Aguarde a mensagem no terminal confirmando que o servidor está rodando na porta `5000`.
 
-- Parte 4
-
-Escolha do Framework: Flask (Opção A)
-
-"Optei pelo Flask (Opção A) devido à sua simplicidade e curva de aprendizado suave para o escopo deste teste. Enquanto o FastAPI oferece melhor performance assíncrona, o Flask é maduro, robusto e perfeitamente capaz de lidar com o volume de dados do teste sem a complexidade adicional de tipagem estática (Pydantic) exigida pelo FastAPI. A facilidade de integração com SQLAlchemy foi um fator decisivo."
-
-Estratégia de Paginação: Offset-based (Opção A)
-
-"Utilizei Paginação via Offset (LIMIT x OFFSET y). Justificativa: É a implementação mais simples e compatível com interfaces de tabela padrão (Página 1, 2, 3). Embora a paginação por Cursor (Keyset) seja mais performática para milhões de registros, para o dataset atual da ANS (alguns milhares de linhas), o Offset não apresenta degradação de performance perceptível e facilita a navegação aleatória pelo usuário."
-
-Cache vs Queries Diretas: Queries Diretas (Opção A)
-
-"Escolhi Calcular sempre na hora (Opção A). Justificativa: Os dados da ANS são atualizados trimestralmente. Em um cenário real de baixa frequência de atualização de dados, a implementação de uma camada de Cache (como Redis) adicionaria complexidade de infraestrutura desnecessária para este teste. O banco de dados MySQL, com os índices criados na etapa anterior, é suficiente para responder às agregações em milissegundos."
-
-Estratégia de Busca: Servidor (Opção A)
-
-"A busca é realizada no Servidor via SQL (LIKE %...%). Justificativa: Trazer todos os dados para o cliente (Front-end) filtrar sobrecarregaria o navegador e consumiria banda excessiva. Filtrar no banco de dados é mais eficiente e escalável."
-
-
-- Instruções de execução:
-Rodar o scraping.py para gerar o CSV resultado_final.csv, o código contempla toda a parte 1
-
-Rodar o validacao.py para gerar os CSVs relatorio_agregado.csv e dados_enriquecidos_validados.csv, o código contempla toda a parte 2.
-
-Executar criar_banco.sql para criar o banco de dados "teste_ans", rodar então o arquivo importar_banco.py, trocando o campo SENHA_MYSQL pela senha do banco do MySQL, rodar então cada query no arquivo queries.sql, isso contempla toda a parte 3.
-
-Executar api.py(trocar SENHA_MYSQL pela senha do MySQL) e executar index.html, isso contempla toda a parte 4.
+### C. Acessar Interface
+Vá até a pasta do projeto e dê um duplo clique no arquivo `index.html` para abrir o Dashboard no seu navegador.
