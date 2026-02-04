@@ -86,14 +86,14 @@ def processar_trimestre(t_dados):
                                 df = pd.read_csv(f, sep=';', encoding='latin1', on_bad_lines='skip')
                                 df.columns = [c.upper().strip() for c in df.columns]
                                 
-                                # Verifica colunas necessárias
+                                
                                 if 'CD_CONTA_CONTABIL' in df.columns and 'VL_SALDO_FINAL' in df.columns:
                                     
-                                    # 1. Filtro: Conta começa com '4'
+                                   
                                     df['CD_CONTA_CONTABIL'] = df['CD_CONTA_CONTABIL'].astype(str)
                                     filtro = df['CD_CONTA_CONTABIL'].str.startswith('4')
                                     
-                                    # Filtro opcional de texto
+                                    
                                     if 'DESCRICAO' in df.columns:
                                         filtro_texto = df['DESCRICAO'].astype(str).str.contains('EVENTO|SINISTRO', case=False, na=False)
                                         df_filtered = df[filtro & filtro_texto].copy()
@@ -101,11 +101,11 @@ def processar_trimestre(t_dados):
                                         df_filtered = df[filtro].copy()
                                     
                                     if not df_filtered.empty:
-                                        # Tratamento de valor
+                                        
                                         if df_filtered['VL_SALDO_FINAL'].dtype == 'O':
                                             df_filtered['VL_SALDO_FINAL'] = df_filtered['VL_SALDO_FINAL'].str.replace('.', '').str.replace(',', '.').astype(float)
                                         
-                                        # Criação de colunas faltantes
+                    
                                         df_filtered['CNPJ'] = "N/D"
                                         if 'REG_ANS' in df_filtered.columns:
                                             df_filtered['RazaoSocial'] = "Reg. ANS " + df_filtered['REG_ANS'].astype(str)
